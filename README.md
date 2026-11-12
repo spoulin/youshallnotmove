@@ -42,7 +42,8 @@ On first launch, allow YouShallNotMove in System Settings › Privacy & Security
 
 ## Icon
 
-- `Icon/make-icon.swift` draws the icon with Core Graphics.
+- `Icon/make-icon.swift` draws the icon with Core Graphics: a gnarled staff nailing a window by its title bar.
+- It also draws two earlier designs: `swift Icon/make-icon.swift out.png staff` or `seal`.
 - `Icon/make-icns.sh` turns it into `Icon/AppIcon.icns`, which `build.sh` copies into the app.
 
 ## Debugging

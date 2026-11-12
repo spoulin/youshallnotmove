@@ -40,6 +40,11 @@ On first launch, allow YouShallNotMove in System Settings › Privacy & Security
 - **Touche pour déplacer**: ⌘, ⌥, ⌃ or ⇧.
 - **Ouvrir au démarrage**: launch at login.
 
+## Icon
+
+- `Icon/make-icon.swift` draws the icon with Core Graphics.
+- `Icon/make-icns.sh` turns it into `Icon/AppIcon.icns`, which `build.sh` copies into the app.
+
 ## Debugging
 
 - Log: `~/Library/Logs/YouShallNotMove.log`.

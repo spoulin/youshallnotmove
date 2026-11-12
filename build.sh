@@ -18,6 +18,8 @@ swiftc -O -swift-version 5 \
 	Sources/main.swift \
 	-framework AppKit -framework ApplicationServices -framework ServiceManagement
 cp Info.plist "$APP/Contents/Info.plist"
+mkdir -p "$APP/Contents/Resources"
+cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 codesign --force --sign "$SIGN_ID" "$APP"
 
 pkill -x YouShallNotMove || true

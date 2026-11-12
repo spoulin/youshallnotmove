@@ -1,0 +1,21 @@
+/* French menu texts. Keys are the English texts used in Sources/main.swift. */
+
+"Waiting for Accessibility access…" = "En attente de l’accès Accessibilité…";
+"Open Settings › Accessibility" = "Ouvrir Réglages › Accessibilité";
+"You shall not move!" = "You shall not move!";
+"Block during the drag" = "Bloquer pendant le glisser";
+"Move key" = "Touche pour déplacer";
+"⌘ Command" = "⌘ Commande";
+"⌥ Option" = "⌥ Option";
+"⌃ Control" = "⌃ Contrôle";
+"⇧ Shift" = "⇧ Majuscule";
+"Refusal sound" = "Son du refus";
+"None" = "Aucun";
+"Access denied" = "Accès refusé";
+"Bwoop" = "Bwoop";
+"Triple beep" = "Triple bip";
+"Force field" = "Champ de force";
+"Volume" = "Volume";
+"%d%%" = "%d %%";
+"Open at login" = "Ouvrir au démarrage";
+"Quit YouShallNotMove" = "Quitter YouShallNotMove";

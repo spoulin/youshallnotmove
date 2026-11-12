@@ -31,6 +31,13 @@ func writeLog(_ message: String) {
 	}
 }
 
+// MARK: - Localization
+
+/// Translates a menu text. English is the key and the default; fr.lproj holds French.
+func localized(_ english: String) -> String {
+	NSLocalizedString(english, comment: "")
+}
+
 // MARK: - Settings
 
 enum Modifier: String, CaseIterable {
@@ -47,10 +54,10 @@ enum Modifier: String, CaseIterable {
 
 	var title: String {
 		switch self {
-		case .command: return "⌘ Commande"
-		case .option: return "⌥ Option"
-		case .control: return "⌃ Contrôle"
-		case .shift: return "⇧ Majuscule"
+		case .command: return localized("⌘ Command")
+		case .option: return localized("⌥ Option")
+		case .control: return localized("⌃ Control")
+		case .shift: return localized("⇧ Shift")
 		}
 	}
 }
@@ -72,6 +79,73 @@ final class Settings {
 	var modifier: Modifier {
 		get { Modifier(rawValue: defaults.string(forKey: "modifier") ?? "") ?? .command }
 		set { defaults.set(newValue.rawValue, forKey: "modifier") }
+	}
+
+	/// Volume of the refusal sound, from 0 to 1.
+	var soundVolume: Float {
+		get { defaults.object(forKey: "soundVolume") as? Float ?? 0.5 }
+		set { defaults.set(newValue, forKey: "soundVolume") }
+	}
+
+	var refusalSound: RefusalSound {
+		get { RefusalSound(rawValue: defaults.string(forKey: "refusalSound") ?? "") ?? .denied }
+		set { defaults.set(newValue.rawValue, forKey: "refusalSound") }
+	}
+}
+
+// MARK: - Refusal sound
+
+/// Played when a window move is refused. The sci-fi beeps are synthesized by Sounds/make-sounds.py.
+enum RefusalSound: String, CaseIterable {
+	case none, denied, bwoop, tripleBeep, forceField, funk, basso, bottle, frog, pop
+
+	var title: String {
+		switch self {
+		case .none: return localized("None")
+		case .denied: return localized("Access denied")
+		case .bwoop: return localized("Bwoop")
+		case .tripleBeep: return localized("Triple beep")
+		case .forceField: return localized("Force field")
+		default: return systemSoundName
+		}
+	}
+
+	/// Name of a macOS system sound, in /System/Library/Sounds.
+	private var systemSoundName: String {
+		rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+	}
+
+	/// The sci-fi beeps ship with the app; the others are macOS system sounds.
+	private var isBundled: Bool {
+		switch self {
+		case .denied, .bwoop, .tripleBeep, .forceField: return true
+		default: return false
+		}
+	}
+
+	private static var cache: [RefusalSound: NSSound] = [:]
+
+	private func load() -> NSSound? {
+		if self == .none {
+			return nil
+		}
+		if isBundled {
+			guard let url = Bundle.main.url(forResource: rawValue, withExtension: "wav") else {
+				return nil
+			}
+			return NSSound(contentsOf: url, byReference: true)
+		}
+		return NSSound(named: NSSound.Name(systemSoundName))
+	}
+
+	func play(volume: Float) {
+		guard let sound = RefusalSound.cache[self] ?? load() else {
+			return
+		}
+		RefusalSound.cache[self] = sound
+		sound.stop()
+		sound.volume = volume
+		sound.play()
 	}
 }
 
@@ -183,6 +257,8 @@ final class DragGuard {
 	private var restorePending = false
 	/// Flags of a title bar mouse-down that was held back, until the button is released.
 	private var heldDown: CGEventFlags?
+	/// The refusal sound already played for this gesture.
+	private var refusalSignaled = false
 
 	/// Marks the clicks this app replays, so its own tap lets them through.
 	private let replayMarker: Int64 = 0x574C4F43
@@ -277,6 +353,10 @@ final class DragGuard {
 
 		case .leftMouseDragged:
 			if heldDown != nil {
+				let distance = hypot(event.location.x - startPoint.x, event.location.y - startPoint.y)
+				if distance > clickTolerance {
+					signalRefusal()
+				}
 				return nil
 			}
 			guard !candidates.isEmpty, !unlocked else {
@@ -306,6 +386,7 @@ final class DragGuard {
 			// release it now, then swallow the rest of the gesture.
 			postMouseUp(at: event.location, flags: event.flags)
 			restore(moved, includeSize: false)
+			signalRefusal()
 			return nil
 
 		case .leftMouseUp:
@@ -322,10 +403,11 @@ final class DragGuard {
 			if dragged, !unlocked, !candidates.isEmpty {
 				let snapshot = candidates
 				let distance = hypot(event.location.x - startPoint.x, event.location.y - startPoint.y)
+				let signaled = refusalSignaled
 				// Check twice: right away, then after a possible tiling animation.
-				for delay in [0.05, 0.6] {
+				for (index, delay) in [0.05, 0.6].enumerated() {
 					DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-						self?.restoreAfterRelease(snapshot, dragDistance: distance)
+						self?.restoreAfterRelease(snapshot, dragDistance: distance, playSound: !signaled && index == 0)
 					}
 				}
 			}
@@ -362,8 +444,22 @@ final class DragGuard {
 		up.post(tap: .cgSessionEventTap)
 	}
 
+	/// Plays the refusal sound once per gesture, outside the event tap callback.
+	private func signalRefusal() {
+		if refusalSignaled {
+			return
+		}
+		refusalSignaled = true
+		let sound = settings.refusalSound
+		let volume = settings.soundVolume
+		DispatchQueue.main.async {
+			sound.play(volume: volume)
+		}
+	}
+
 	private func resetGesture() {
 		heldDown = nil
+		refusalSignaled = false
 		candidates = []
 		dragged = false
 		unlocked = false
@@ -411,7 +507,7 @@ final class DragGuard {
 		}
 	}
 
-	private func restoreAfterRelease(_ windows: [TrackedWindow], dragDistance: CGFloat) {
+	private func restoreAfterRelease(_ windows: [TrackedWindow], dragDistance: CGFloat, playSound: Bool) {
 		let frames = currentFrames(of: windows)
 		var toRestore: [TrackedWindow] = []
 		var resized = false
@@ -430,6 +526,9 @@ final class DragGuard {
 			return
 		}
 		writeLog("restoring \(toRestore.count) window(s) after release")
+		if playSound {
+			settings.refusalSound.play(volume: settings.soundVolume)
+		}
 		restore(toRestore, includeSize: resized, force: true)
 	}
 
@@ -500,15 +599,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		let menu = NSMenu()
 
 		if !dragGuard.isRunning {
-			menu.addItem(NSMenuItem(title: "En attente de l’accès Accessibilité…", action: nil, keyEquivalent: ""))
-			menu.addItem(item("Ouvrir Réglages › Accessibilité", #selector(openAccessibility)))
+			menu.addItem(NSMenuItem(title: localized("Waiting for Accessibility access…"), action: nil, keyEquivalent: ""))
+			menu.addItem(item(localized("Open Settings › Accessibility"), #selector(openAccessibility)))
 			menu.addItem(.separator())
 		}
 
-		menu.addItem(item("You shall not move!", #selector(toggleEnabled), checked: settings.enabled))
-		menu.addItem(item("Bloquer pendant le glisser", #selector(toggleBlockDuringDrag), checked: settings.blockDuringDrag))
+		menu.addItem(item(localized("You shall not move!"), #selector(toggleEnabled), checked: settings.enabled))
+		menu.addItem(item(localized("Block during the drag"), #selector(toggleBlockDuringDrag), checked: settings.blockDuringDrag))
 
-		let modifierItem = NSMenuItem(title: "Touche pour déplacer", action: nil, keyEquivalent: "")
+		let modifierItem = NSMenuItem(title: localized("Move key"), action: nil, keyEquivalent: "")
 		let modifierMenu = NSMenu()
 		for modifier in Modifier.allCases {
 			let entry = item(modifier.title, #selector(chooseModifier(_:)), checked: settings.modifier == modifier)
@@ -518,10 +617,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		modifierItem.submenu = modifierMenu
 		menu.addItem(modifierItem)
 
+		let soundItem = NSMenuItem(title: localized("Refusal sound"), action: nil, keyEquivalent: "")
+		let soundMenu = NSMenu()
+		for sound in RefusalSound.allCases {
+			let entry = item(sound.title, #selector(chooseSound(_:)), checked: settings.refusalSound == sound)
+			entry.representedObject = sound.rawValue
+			soundMenu.addItem(entry)
+			if sound == .none || sound == .forceField {
+				soundMenu.addItem(.separator())
+			}
+		}
+		soundMenu.addItem(.separator())
+		let volumeItem = NSMenuItem(title: localized("Volume"), action: nil, keyEquivalent: "")
+		let volumeMenu = NSMenu()
+		for volume: Float in [0.25, 0.5, 0.75, 1] {
+			let title = String(format: localized("%d%%"), Int(volume * 100))
+			let entry = item(title, #selector(chooseVolume(_:)), checked: abs(settings.soundVolume - volume) < 0.01)
+			entry.representedObject = volume
+			volumeMenu.addItem(entry)
+		}
+		volumeItem.submenu = volumeMenu
+		soundMenu.addItem(volumeItem)
+		soundItem.submenu = soundMenu
+		menu.addItem(soundItem)
+
 		menu.addItem(.separator())
 		let loginEnabled = SMAppService.mainApp.status == .enabled
-		menu.addItem(item("Ouvrir au démarrage", #selector(toggleLaunchAtLogin), checked: loginEnabled))
-		menu.addItem(item("Quitter YouShallNotMove", #selector(quit), key: "q"))
+		menu.addItem(item(localized("Open at login"), #selector(toggleLaunchAtLogin), checked: loginEnabled))
+		menu.addItem(item(localized("Quit YouShallNotMove"), #selector(quit), key: "q"))
 
 		statusItem.menu = menu
 	}
@@ -546,6 +669,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	@objc private func chooseModifier(_ sender: NSMenuItem) {
 		if let raw = sender.representedObject as? String, let modifier = Modifier(rawValue: raw) {
 			settings.modifier = modifier
+		}
+		rebuildMenu()
+	}
+
+	/// Selects the sound and plays it as a preview.
+	/// Sets the volume and plays the current sound as a preview.
+	@objc private func chooseVolume(_ sender: NSMenuItem) {
+		if let volume = sender.representedObject as? Float {
+			settings.soundVolume = volume
+			settings.refusalSound.play(volume: volume)
+		}
+		rebuildMenu()
+	}
+
+	@objc private func chooseSound(_ sender: NSMenuItem) {
+		if let raw = sender.representedObject as? String, let sound = RefusalSound(rawValue: raw) {
+			settings.refusalSound = sound
+			sound.play(volume: settings.soundVolume)
 		}
 		rebuildMenu()
 	}

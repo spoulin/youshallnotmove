@@ -20,6 +20,9 @@ swiftc -O -swift-version 5 \
 cp Info.plist "$APP/Contents/Info.plist"
 mkdir -p "$APP/Contents/Resources"
 cp Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
+cp Sounds/*.wav "$APP/Contents/Resources/"
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
 codesign --force --sign "$SIGN_ID" "$APP"
 
 pkill -x YouShallNotMove || true

@@ -40,9 +40,19 @@ On first launch, allow YouShallNotMove in System Settings › Privacy & Security
 ## Menu
 
 - **You shall not move!**: turn the lock on or off.
-- **Bloquer pendant le glisser**: block as described above, or only snap the window back on release.
-- **Touche pour déplacer**: ⌘, ⌥, ⌃ or ⇧.
-- **Ouvrir au démarrage**: launch at login.
+- **Block during the drag**: block as described above, or only snap the window back on release.
+- **Move key**: ⌘, ⌥, ⌃ or ⇧.
+- **Refusal sound**: the sound played when a move is refused, and its volume. Choosing one plays it.
+- **Open at login**: launch at login.
+
+The menu is in English, or in French when macOS is in French.
+The French texts are in `Resources/fr.lproj/Localizable.strings`.
+
+## Sounds
+
+- `Sounds/make-sounds.py` synthesizes the sci-fi beeps as WAV files, which `build.sh` copies into the app.
+- Change `PITCH` in it to make them deeper or higher.
+- The other choices are macOS system sounds.
 
 ## Icon
 

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Icon/AppIcon.png" width="200" alt="YouShallNotMove icon: a gnarled staff nailing a window by its title bar">
+</p>
+
 # YouShallNotMove
 
 A macOS menu bar app that keeps your windows where you put them.
@@ -45,6 +49,7 @@ On first launch, allow YouShallNotMove in System Settings › Privacy & Security
 - `Icon/make-icon.swift` draws the icon with Core Graphics: a gnarled staff nailing a window by its title bar.
 - It also draws two earlier designs: `swift Icon/make-icon.swift out.png staff` or `seal`.
 - `Icon/make-icns.sh` turns it into `Icon/AppIcon.icns`, which `build.sh` copies into the app.
+- `Icon/AppIcon.png` is a 512 px copy for this README.
 
 ## Debugging
 

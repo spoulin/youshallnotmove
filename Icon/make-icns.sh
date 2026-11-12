@@ -1,5 +1,5 @@
 #!/bin/bash
-# Regenerate Icon/AppIcon.icns from Icon/make-icon.swift.
+# Regenerate Icon/AppIcon.icns and Icon/AppIcon.png from Icon/make-icon.swift.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -15,4 +15,5 @@ for size in 16 32 128 256 512; do
 	sips -z "$double" "$double" "$WORK/icon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "$ICONSET" -o AppIcon.icns
-echo "Wrote Icon/AppIcon.icns"
+sips -z 512 512 "$WORK/icon.png" --out AppIcon.png >/dev/null
+echo "Wrote Icon/AppIcon.icns and Icon/AppIcon.png"

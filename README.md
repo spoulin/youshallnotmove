@@ -66,3 +66,9 @@ The French texts are in `Resources/fr.lproj/Localizable.strings`.
 - Log: `~/Library/Logs/YouShallNotMove.log`.
 - `YouShallNotMove --probe <file>` writes the Accessibility roles found at the top of each visible window.
   Run it through `open -n -a YouShallNotMove --args --probe <file>` so it gets the app's permission.
+
+## Support
+
+If YouShallNotMove saves your windows (and your nerves), you can buy me a coffee.
+
+<a href="https://buymeacoffee.com/stephanepoulin"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>

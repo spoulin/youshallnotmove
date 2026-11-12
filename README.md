@@ -4,6 +4,8 @@
 
 # YouShallNotMove
 
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stephanepoulin)
+
 A macOS menu bar app that keeps your windows where you put them.
 
 A click on a title bar with a shaky hand moves the window by one or two pixels.

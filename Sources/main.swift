@@ -157,6 +157,17 @@ struct TrackedWindow {
 	let frame: CGRect
 }
 
+/// Window server layers of app windows: normal ones (0) up to "always on top" ones (floating, 3).
+/// Higher layers are the Dock, the menu bar, menus and other system windows.
+private let appWindowLayers = 0...Int(CGWindowLevelForKey(.floatingWindow))
+
+private func isAppWindow(_ info: [String: Any]) -> Bool {
+	guard let layer = info[kCGWindowLayer as String] as? Int else {
+		return false
+	}
+	return appWindowLayers.contains(layer)
+}
+
 private func windowsContaining(_ point: CGPoint) -> [TrackedWindow] {
 	let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
 	guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
@@ -166,7 +177,7 @@ private func windowsContaining(_ point: CGPoint) -> [TrackedWindow] {
 	var result: [TrackedWindow] = []
 	for info in list {
 		guard
-			(info[kCGWindowLayer as String] as? Int) == 0,
+			isAppWindow(info),
 			let pid = info[kCGWindowOwnerPID as String] as? pid_t,
 			pid != ownPid,
 			let id = info[kCGWindowNumber as String] as? CGWindowID,
@@ -740,7 +751,7 @@ private func runProbe(output: String) {
 	let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
 	for info in list {
 		guard
-			(info[kCGWindowLayer as String] as? Int) == 0,
+			isAppWindow(info),
 			let id = info[kCGWindowNumber as String] as? CGWindowID,
 			let owner = info[kCGWindowOwnerName as String] as? String,
 			let bounds = info[kCGWindowBounds as String] as? NSDictionary,

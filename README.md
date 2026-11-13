@@ -32,12 +32,21 @@ YouShallNotMove blocks window drags unless you hold a modifier key (⌘ by defau
 
 1. Click **Download** above to get `YouShallNotMove.dmg`, then open it.
 2. Drag YouShallNotMove onto Applications.
+
+   <img src="Resources/install-dmg.png" width="440" alt="The YouShallNotMove disk image: drag YouShallNotMove onto Applications">
+
 3. Open YouShallNotMove from Applications. The first time, macOS says it can't check it, because
    it doesn't come from the App Store or from a developer known to Apple. Click **Done**, not
    Move to Trash.
+
+   <img src="Resources/install-not-opened.png" width="260" alt="macOS: YouShallNotMove.app Not Opened, with Move to Trash and Done">
+
 4. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click
    **Open Anyway** next to the message about YouShallNotMove. Confirm with your password or
    Touch ID, then click **Open Anyway** once more.
+
+   <img src="Resources/install-open-anyway.png" width="440" alt="System Settings, Privacy & Security: YouShallNotMove.app was blocked to protect your Mac, Open Anyway">
+
 5. YouShallNotMove asks for Accessibility access, which it needs to see and stop window drags:
    allow it in **System Settings › Privacy & Security › Accessibility**.
 

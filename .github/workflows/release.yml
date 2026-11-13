@@ -1,0 +1,74 @@
+# Builds YouShallNotMove for Apple silicon and Intel Macs and makes YouShallNotMove.dmg.
+# - A tag like v1.2.0 (git tag v1.2.0 && git push origin v1.2.0) publishes a GitHub release with
+#   the disk image, so the README's Download link gets the new version.
+# - Run by hand (Actions › Release › Run workflow), it only builds the disk image, to check it:
+#   download it from the run's artifacts.
+# Free on a public repository. The app is signed ad hoc, not notarized: the first launch needs
+# System Settings › Privacy & Security › Open Anyway, as the disk image's background says.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Apple silicon. When GitHub has none free, the job waits then fails: run it again
+    # (Actions › the run › Re-run jobs). GitHub's Intel machines build the app but make dmgbuild
+    # crash (tested 2026-11-13), so they aren't a fallback.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # build.sh counts the commits for the build number
+
+      # Signed with the "YouShallNotMove Release Signing" certificate (self-signed, not tied to
+      # an Apple account; repository secrets SIGNING_P12 and SIGNING_P12_PASSWORD). The same
+      # certificate keeps macOS's Accessibility permission from one version to the next.
+      - name: Import the signing certificate
+        env:
+          SIGNING_P12: ${{ secrets.SIGNING_P12 }}
+          SIGNING_P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+        run: |
+          KC="$RUNNER_TEMP/signing.keychain-db"
+          KP=$(openssl rand -hex 16)
+          echo "$SIGNING_P12" | base64 --decode > "$RUNNER_TEMP/signing.p12"
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 3600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          security import "$RUNNER_TEMP/signing.p12" -k "$KC" -P "$SIGNING_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/signing.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KP" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          echo "SIGN_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+          echo "SIGN_ID=$(security find-certificate -c 'YouShallNotMove Release Signing' -Z "$KC" | awk '/SHA-1/ {print $3}')" >> "$GITHUB_ENV"
+
+      - name: Build YouShallNotMove for Apple silicon and Intel
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then export VERSION="${GITHUB_REF_NAME#v}"; fi
+          UNIVERSAL=1 NO_INSTALL=1 ./build.sh
+
+      - name: Make the disk image
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet dmgbuild
+          NAME="YouShallNotMove" COLORS="3B2A7A 251A5C 120D30" PATH="$RUNNER_TEMP/venv/bin:$PATH" tools/make-dmg.sh build/YouShallNotMove.app YouShallNotMove.dmg
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" YouShallNotMove.dmg \
+            --title "YouShallNotMove ${GITHUB_REF_NAME#v}" --generate-notes
+
+      - name: Keep the disk image of a run by hand
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouShallNotMove.dmg
+          path: YouShallNotMove.dmg

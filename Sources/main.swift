@@ -655,6 +655,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		menu.addItem(.separator())
 		let loginEnabled = SMAppService.mainApp.status == .enabled
 		menu.addItem(item(localized("Open at login"), #selector(toggleLaunchAtLogin), checked: loginEnabled))
+		menu.addItem(.separator())
+		// The version, and where to get a newer one: releases are on GitHub, made by the Release
+		// workflow from a version tag. The app isn't notarized, so it doesn't update itself.
+		let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+		menu.addItem(NSMenuItem(title: "YouShallNotMove \(version)", action: nil, keyEquivalent: ""))
+		menu.addItem(item(localized("Check for Updates…"), #selector(checkForUpdates)))
 		menu.addItem(item(localized("Quit YouShallNotMove"), #selector(quit), key: "q"))
 
 		statusItem.menu = menu
@@ -718,6 +724,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	@objc private func openAccessibility() {
 		let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
 		NSWorkspace.shared.open(url)
+	}
+
+	@objc private func checkForUpdates() {
+		NSWorkspace.shared.open(URL(string: "https://github.com/spoulin/youshallnotmove/releases/latest")!)
 	}
 
 	@objc private func quit() {

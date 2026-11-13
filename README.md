@@ -6,6 +6,10 @@
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stephanepoulin)
 
+[![Download YouShallNotMove for macOS](https://img.shields.io/badge/Download-YouShallNotMove%20for%20macOS-4B3A9A?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/spoulin/youshallnotmove/releases/latest/download/YouShallNotMove.dmg)
+
+For macOS 13 or later, on Apple silicon and Intel Macs. See [Install](#install).
+
 A macOS menu bar app that keeps your windows where you put them.
 
 A click on a title bar with a shaky hand moves the window by one or two pixels.
@@ -24,6 +28,26 @@ YouShallNotMove blocks window drags unless you hold a modifier key (⌘ by defau
 - Hold the modifier key when you click to move the window normally.
 - Resizing from an edge, double-clicking a title bar and the green button are not blocked.
 
+## Install
+
+1. Click **Download** above to get `YouShallNotMove.dmg`, then open it.
+2. Drag YouShallNotMove onto Applications.
+3. Open YouShallNotMove from Applications. The first time, macOS says it can't check it, because
+   it doesn't come from the App Store or from a developer known to Apple. Click **Done**, not
+   Move to Trash.
+4. Open **System Settings › Privacy & Security**, scroll down to **Security**, and click
+   **Open Anyway** next to the message about YouShallNotMove. Confirm with your password or
+   Touch ID, then click **Open Anyway** once more.
+5. YouShallNotMove asks for Accessibility access, which it needs to see and stop window drags:
+   allow it in **System Settings › Privacy & Security › Accessibility**.
+
+Steps 3 and 4 are needed once only. Clicked Move to Trash by mistake? Open the disk image again,
+drag the app onto Applications, and start over at step 3.
+
+To update, choose **Check for Updates…** in the menu bar menu: it opens the page of the latest
+version. Download it and drag it onto Applications again, replacing the old one. Every release is
+signed with the same certificate, so the Accessibility access stays.
+
 ## Build and install
 
 Requires the Xcode command line tools.
@@ -38,6 +62,25 @@ The script builds `YouShallNotMove.app`, signs it, installs it in `~/Application
 - A stable identity keeps the Accessibility permission across rebuilds.
 
 On first launch, allow YouShallNotMove in System Settings › Privacy & Security › Accessibility.
+
+### Releases
+
+A version tag publishes a release: the Release workflow (`.github/workflows/release.yml`) builds
+YouShallNotMove for Apple silicon and Intel, signs it, makes `YouShallNotMove.dmg` and attaches
+it to a GitHub release, which the Download link above always points to.
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+- Releases are signed with a self-signed certificate, "YouShallNotMove Release Signing", kept in
+  the repository secrets `SIGNING_P12` and `SIGNING_P12_PASSWORD`. It isn't tied to an Apple
+  account, so macOS asks to Open Anyway the first time; but it stays the same from one version
+  to the next, so macOS keeps the Accessibility access after an update.
+- To make the disk image on your Mac: `pip3 install dmgbuild`, then
+  `UNIVERSAL=1 NO_INSTALL=1 ./build.sh` and
+  `NAME=YouShallNotMove tools/make-dmg.sh build/YouShallNotMove.app YouShallNotMove.dmg`.
 
 ## Menu
 

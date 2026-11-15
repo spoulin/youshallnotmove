@@ -94,6 +94,10 @@ git push origin v1.0.0
 ## Menu
 
 - **You shall not move!**: turn the lock on or off.
+- **Toggle shortcut**: a shortcut that turns the lock on or off from any app, ⌃⌥⌘L by default.
+  - **Change…** opens a small window: press the new shortcut, or Esc to cancel.
+  - It needs ⌘, ⌥ or ⌃ with a key, or a function key alone.
+  - A short sound tells whether the lock is now on (Tink) or off (Pop).
 - **Block during the drag**: block as described above, or only snap the window back on release.
 - **Move key**: ⌘, ⌥, ⌃ or ⇧.
 - **Refusal sound**: the sound played when a move is refused, and its volume. Choosing one plays it.

@@ -26,7 +26,7 @@ compile() { # compile <output> [target]
 	swiftc -O -swift-version 5 ${2:+-target "$2"} \
 		-o "$1" \
 		Sources/main.swift \
-		-framework AppKit -framework ApplicationServices -framework ServiceManagement
+		-framework AppKit -framework ApplicationServices -framework Carbon -framework ServiceManagement
 }
 if [[ -n "${UNIVERSAL:-}" ]]; then
 	MIN=$(/usr/libexec/PlistBuddy -c "Print LSMinimumSystemVersion" Info.plist)

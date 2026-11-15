@@ -20,3 +20,12 @@
 "Open at login" = "Ouvrir au démarrage";
 "Quit YouShallNotMove" = "Quitter YouShallNotMove";
 "Check for Updates…" = "Rechercher des mises à jour…";
+"Toggle shortcut" = "Raccourci d’activation";
+"Current: %@" = "Actuel : %@";
+"%@ (used by another app)" = "%@ (pris par une autre app)";
+"Change…" = "Modifier…";
+"Reset to %@" = "Revenir à %@";
+"Press the new shortcut." = "Appuyez sur le nouveau raccourci.";
+"Use ⌘, ⌥ or ⌃ with a key, or a function key. Esc cancels." = "Utilisez ⌘, ⌥ ou ⌃ avec une touche, ou une touche de fonction. Échap annule.";
+"Add ⌘, ⌥ or ⌃, or use a function key." = "Ajoutez ⌘, ⌥ ou ⌃, ou utilisez une touche de fonction.";
+"%@ is already used by another app. Try another one." = "%@ est déjà pris par une autre app. Essayez-en un autre.";

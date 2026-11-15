@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import Carbon.HIToolbox
 import ServiceManagement
 
 // Private but stable API used by most window managers (Rectangle, yabai, ...)
@@ -90,6 +91,34 @@ final class Settings {
 	var refusalSound: RefusalSound {
 		get { RefusalSound(rawValue: defaults.string(forKey: "refusalSound") ?? "") ?? .denied }
 		set { defaults.set(newValue.rawValue, forKey: "refusalSound") }
+	}
+
+	/// The system-wide shortcut that turns the lock on or off. nil when the user chose None.
+	var toggleShortcut: Shortcut? {
+		get {
+			if defaults.bool(forKey: "toggleShortcutOff") {
+				return nil
+			}
+			guard
+				let saved = defaults.dictionary(forKey: "toggleShortcut"),
+				let keyCode = saved["keyCode"] as? Int,
+				let modifiers = saved["modifiers"] as? Int,
+				let key = saved["key"] as? String
+			else {
+				return .standard
+			}
+			return Shortcut(keyCode: UInt32(keyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(modifiers)), key: key)
+		}
+		set {
+			defaults.set(newValue == nil, forKey: "toggleShortcutOff")
+			if let shortcut = newValue {
+				defaults.set([
+					"keyCode": Int(shortcut.keyCode),
+					"modifiers": Int(shortcut.modifiers.rawValue),
+					"key": shortcut.key,
+				], forKey: "toggleShortcut")
+			}
+		}
 	}
 }
 
@@ -562,6 +591,208 @@ final class DragGuard {
 	}
 }
 
+// MARK: - Toggle shortcut
+
+/// A key with modifiers, recorded by the user to turn the lock on or off.
+struct Shortcut: Equatable {
+	let keyCode: UInt32
+	/// Only command, option, control and shift.
+	let modifiers: NSEvent.ModifierFlags
+	/// The key as shown in the menu, such as "L" or "F5".
+	let key: String
+
+	static let standard = Shortcut(keyCode: UInt32(kVK_ANSI_L), modifiers: [.control, .option, .command], key: "L")
+
+	private static let functionKeys: [Int] = [
+		kVK_F1, kVK_F2, kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F9, kVK_F10,
+		kVK_F11, kVK_F12, kVK_F13, kVK_F14, kVK_F15, kVK_F16, kVK_F17, kVK_F18, kVK_F19, kVK_F20,
+	]
+
+	private static let namedKeys: [Int: String] = [
+		kVK_Space: "Space", kVK_Return: "↩", kVK_Tab: "⇥", kVK_Delete: "⌫", kVK_ForwardDelete: "⌦",
+		kVK_LeftArrow: "←", kVK_RightArrow: "→", kVK_UpArrow: "↑", kVK_DownArrow: "↓",
+		kVK_Home: "↖", kVK_End: "↘", kVK_PageUp: "⇞", kVK_PageDown: "⇟",
+	]
+
+	/// The shortcut typed in the recorder. nil when it has no ⌘, ⌥ or ⌃ and isn't a function key:
+	/// a plain key would fire while typing.
+	static func recorded(from event: NSEvent) -> Shortcut? {
+		let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+		let code = Int(event.keyCode)
+		let key: String
+		if let index = functionKeys.firstIndex(of: code) {
+			key = "F\(index + 1)"
+		} else if let name = namedKeys[code] {
+			key = name
+		} else if let characters = event.charactersIgnoringModifiers?.uppercased(), !characters.isEmpty {
+			key = characters
+		} else {
+			return nil
+		}
+		let isFunctionKey = key.hasPrefix("F") && key.count > 1 && Int(key.dropFirst()) != nil
+		guard isFunctionKey || !modifiers.intersection([.command, .option, .control]).isEmpty else {
+			return nil
+		}
+		return Shortcut(keyCode: UInt32(code), modifiers: modifiers, key: key)
+	}
+
+	/// "⌃⌥⇧⌘L", in the order macOS shows them.
+	var title: String {
+		var text = ""
+		if modifiers.contains(.control) { text += "⌃" }
+		if modifiers.contains(.option) { text += "⌥" }
+		if modifiers.contains(.shift) { text += "⇧" }
+		if modifiers.contains(.command) { text += "⌘" }
+		return text + key
+	}
+
+	/// The menu item's key equivalent, so the menu shows the shortcut next to the toggle.
+	/// Empty for keys a menu can't show, like the arrows: the submenu still names them.
+	var keyEquivalent: String {
+		if key.hasPrefix("F"), let number = Int(key.dropFirst()), (1...20).contains(number) {
+			return String(Character(UnicodeScalar(NSF1FunctionKey + number - 1)!))
+		}
+		return key.count == 1 ? key.lowercased() : ""
+	}
+
+	fileprivate var carbonModifiers: UInt32 {
+		var flags = 0
+		if modifiers.contains(.command) { flags |= cmdKey }
+		if modifiers.contains(.option) { flags |= optionKey }
+		if modifiers.contains(.control) { flags |= controlKey }
+		if modifiers.contains(.shift) { flags |= shiftKey }
+		return UInt32(flags)
+	}
+}
+
+/// A system-wide shortcut through Carbon hot keys, which need no extra permission.
+final class HotKey {
+	private let action: () -> Void
+	private var hotKey: EventHotKeyRef?
+	private var handler: EventHandlerRef?
+
+	init(action: @escaping () -> Void) {
+		self.action = action
+		var pressed = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+		InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
+			guard let userData else {
+				return OSStatus(eventNotHandledErr)
+			}
+			Unmanaged<HotKey>.fromOpaque(userData).takeUnretainedValue().action()
+			return noErr
+		}, 1, &pressed, Unmanaged.passUnretained(self).toOpaque(), &handler)
+	}
+
+	/// Replaces the shortcut. Returns false when macOS refuses it, usually because another app has it.
+	@discardableResult
+	func register(_ shortcut: Shortcut?) -> Bool {
+		unregister()
+		guard let shortcut else {
+			return true
+		}
+		let id = EventHotKeyID(signature: OSType(0x5953_4E4D), id: 1) // "YSNM"
+		let status = RegisterEventHotKey(shortcut.keyCode, shortcut.carbonModifiers, id, GetApplicationEventTarget(), 0, &hotKey)
+		guard status == noErr else {
+			hotKey = nil
+			writeLog("shortcut \(shortcut.title) refused: \(status)")
+			return false
+		}
+		return true
+	}
+
+	func unregister() {
+		if let hotKey {
+			UnregisterEventHotKey(hotKey)
+		}
+		hotKey = nil
+	}
+}
+
+/// A small window that waits for the new shortcut. Esc, closing it or clicking elsewhere cancels.
+final class ShortcutRecorder: NSObject, NSWindowDelegate {
+	private var panel: NSPanel?
+	private var monitor: Any?
+	private let hint = NSTextField(wrappingLabelWithString: "")
+	/// Tries the shortcut; false keeps the window open with a message.
+	private var accept: ((Shortcut) -> Bool)?
+	private var finished: (() -> Void)?
+
+	func start(accept: @escaping (Shortcut) -> Bool, finished: @escaping () -> Void) {
+		if let panel {
+			NSApp.activate(ignoringOtherApps: true)
+			panel.makeKeyAndOrderFront(nil)
+			return
+		}
+		self.accept = accept
+		self.finished = finished
+
+		let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 120),
+		                    styleMask: [.titled, .closable], backing: .buffered, defer: false)
+		panel.title = localized("Toggle shortcut")
+		panel.isReleasedWhenClosed = false
+		panel.hidesOnDeactivate = false
+		panel.level = .floating
+		panel.delegate = self
+
+		let prompt = NSTextField(labelWithString: localized("Press the new shortcut."))
+		prompt.font = .systemFont(ofSize: 15, weight: .semibold)
+		hint.stringValue = localized("Use ⌘, ⌥ or ⌃ with a key, or a function key. Esc cancels.")
+		hint.textColor = .secondaryLabelColor
+		hint.alignment = .center
+		hint.preferredMaxLayoutWidth = 320
+		let stack = NSStackView(views: [prompt, hint])
+		stack.orientation = .vertical
+		stack.alignment = .centerX
+		stack.spacing = 8
+		stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+		panel.contentView = stack
+
+		monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+			self?.handle(event)
+			return nil
+		}
+		self.panel = panel
+		panel.center()
+		NSApp.activate(ignoringOtherApps: true)
+		panel.makeKeyAndOrderFront(nil)
+	}
+
+	private func handle(_ event: NSEvent) {
+		let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+		if Int(event.keyCode) == kVK_Escape, modifiers.isEmpty {
+			panel?.close()
+			return
+		}
+		guard let shortcut = Shortcut.recorded(from: event) else {
+			hint.stringValue = localized("Add ⌘, ⌥ or ⌃, or use a function key.")
+			NSSound.beep()
+			return
+		}
+		if accept?(shortcut) == true {
+			panel?.close()
+		} else {
+			hint.stringValue = String(format: localized("%@ is already used by another app. Try another one."), shortcut.title)
+			NSSound.beep()
+		}
+	}
+
+	func windowDidResignKey(_ notification: Notification) {
+		panel?.close()
+	}
+
+	func windowWillClose(_ notification: Notification) {
+		if let monitor {
+			NSEvent.removeMonitor(monitor)
+		}
+		monitor = nil
+		panel = nil
+		accept = nil
+		let done = finished
+		finished = nil
+		done?()
+	}
+}
+
 // MARK: - Menu bar app
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -569,11 +800,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	private lazy var dragGuard = DragGuard(settings: settings)
 	private var statusItem: NSStatusItem!
 	private var permissionTimer: Timer?
+	private lazy var hotKey = HotKey { [weak self] in
+		self?.toggle(fromShortcut: true)
+	}
+	private let recorder = ShortcutRecorder()
+	/// False when macOS refused the saved shortcut, usually because another app has it.
+	private var shortcutActive = true
+	/// The menu's key equivalent and the hot key can both fire while the menu is open.
+	private var lastToggle = Date.distantPast
 
 	func applicationDidFinishLaunching(_ notification: Notification) {
 		statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+		registerShortcut()
 		rebuildMenu()
 		startWhenTrusted(prompt: true)
+	}
+
+	private func registerShortcut() {
+		shortcutActive = hotKey.register(settings.toggleShortcut)
 	}
 
 	private func startWhenTrusted(prompt: Bool) {
@@ -615,7 +859,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 			menu.addItem(.separator())
 		}
 
-		menu.addItem(item(localized("You shall not move!"), #selector(toggleEnabled), checked: settings.enabled))
+		let toggleItem = item(localized("You shall not move!"), #selector(toggleEnabled), checked: settings.enabled)
+		if let shortcut = settings.toggleShortcut, shortcutActive, !shortcut.keyEquivalent.isEmpty {
+			toggleItem.keyEquivalent = shortcut.keyEquivalent
+			toggleItem.keyEquivalentModifierMask = shortcut.modifiers
+		}
+		menu.addItem(toggleItem)
 		menu.addItem(item(localized("Block during the drag"), #selector(toggleBlockDuringDrag), checked: settings.blockDuringDrag))
 
 		let modifierItem = NSMenuItem(title: localized("Move key"), action: nil, keyEquivalent: "")
@@ -627,6 +876,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		}
 		modifierItem.submenu = modifierMenu
 		menu.addItem(modifierItem)
+
+		let shortcutItem = NSMenuItem(title: localized("Toggle shortcut"), action: nil, keyEquivalent: "")
+		let shortcutMenu = NSMenu()
+		shortcutMenu.autoenablesItems = false
+		let current: String
+		if let shortcut = settings.toggleShortcut {
+			current = shortcutActive ? shortcut.title : String(format: localized("%@ (used by another app)"), shortcut.title)
+		} else {
+			current = localized("None")
+		}
+		let currentItem = NSMenuItem(title: String(format: localized("Current: %@"), current), action: nil, keyEquivalent: "")
+		currentItem.isEnabled = false
+		shortcutMenu.addItem(currentItem)
+		shortcutMenu.addItem(.separator())
+		shortcutMenu.addItem(item(localized("Change…"), #selector(changeShortcut)))
+		let resetItem = item(String(format: localized("Reset to %@"), Shortcut.standard.title), #selector(resetShortcut))
+		resetItem.isEnabled = settings.toggleShortcut != .standard
+		shortcutMenu.addItem(resetItem)
+		shortcutMenu.addItem(item(localized("None"), #selector(clearShortcut), checked: settings.toggleShortcut == nil))
+		shortcutItem.submenu = shortcutMenu
+		menu.addItem(shortcutItem)
 
 		let soundItem = NSMenuItem(title: localized("Refusal sound"), action: nil, keyEquivalent: "")
 		let soundMenu = NSMenu()
@@ -674,7 +944,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 	}
 
 	@objc private func toggleEnabled() {
+		toggle(fromShortcut: false)
+	}
+
+	/// From the shortcut, the menu isn't on screen: a sound tells whether the lock is now on or off.
+	private func toggle(fromShortcut: Bool) {
+		guard Date().timeIntervalSince(lastToggle) > 0.3 else {
+			return
+		}
+		lastToggle = Date()
 		settings.enabled.toggle()
+		if fromShortcut, let sound = NSSound(named: settings.enabled ? "Tink" : "Pop") {
+			sound.volume = settings.soundVolume
+			sound.play()
+		}
+		writeLog("lock turned \(settings.enabled ? "on" : "off")\(fromShortcut ? " by the shortcut" : "")")
+		rebuildMenu()
+	}
+
+	@objc private func changeShortcut() {
+		hotKey.unregister()
+		recorder.start(accept: { [weak self] shortcut in
+			guard let self, self.hotKey.register(shortcut) else {
+				return false
+			}
+			self.settings.toggleShortcut = shortcut
+			return true
+		}, finished: { [weak self] in
+			self?.registerShortcut()
+			self?.rebuildMenu()
+		})
+	}
+
+	@objc private func resetShortcut() {
+		settings.toggleShortcut = .standard
+		registerShortcut()
+		rebuildMenu()
+	}
+
+	@objc private func clearShortcut() {
+		settings.toggleShortcut = nil
+		registerShortcut()
 		rebuildMenu()
 	}
 

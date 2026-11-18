@@ -29,3 +29,5 @@
 "Use ⌘, ⌥ or ⌃ with a key, or a function key. Esc cancels." = "Utilisez ⌘, ⌥ ou ⌃ avec une touche, ou une touche de fonction. Échap annule.";
 "Add ⌘, ⌥ or ⌃, or use a function key." = "Ajoutez ⌘, ⌥ ou ⌃, ou utilisez une touche de fonction.";
 "%@ is already used by another app. Try another one." = "%@ est déjà pris par une autre app. Essayez-en un autre.";
+"Except apps" = "Sauf ces apps";
+"Checked apps move without the move key" = "Les apps cochées bougent sans la touche";

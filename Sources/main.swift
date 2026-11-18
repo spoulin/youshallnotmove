@@ -93,6 +93,12 @@ final class Settings {
 		set { defaults.set(newValue.rawValue, forKey: "refusalSound") }
 	}
 
+	/// Bundle ids of the apps whose windows move freely, without the move key.
+	var exceptApps: Set<String> {
+		get { Set(defaults.stringArray(forKey: "exceptApps") ?? []) }
+		set { defaults.set(newValue.sorted(), forKey: "exceptApps") }
+	}
+
 	/// The system-wide shortcut that turns the lock on or off. nil when the user chose None.
 	var toggleShortcut: Shortcut? {
 		get {
@@ -323,6 +329,20 @@ final class DragGuard {
 		tap != nil
 	}
 
+	/// Bundle ids by process, so the event tap doesn't look them up at each click.
+	private var bundleIds: [pid_t: String] = [:]
+
+	private func isExcepted(_ pid: pid_t) -> Bool {
+		let excepted = settings.exceptApps
+		guard !excepted.isEmpty else {
+			return false
+		}
+		if bundleIds[pid] == nil {
+			bundleIds[pid] = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? ""
+		}
+		return excepted.contains(bundleIds[pid] ?? "")
+	}
+
 	func start() -> Bool {
 		if tap != nil {
 			return true
@@ -379,7 +399,13 @@ final class DragGuard {
 			}
 			startPoint = event.location
 			lastPoint = startPoint
-			candidates = windowsContaining(startPoint)
+			let underCursor = windowsContaining(startPoint)
+			// The clicked window is the frontmost one: its app may be on the user's except list.
+			if let front = underCursor.first, isExcepted(front.pid) {
+				unlocked = true
+				return pass
+			}
+			candidates = underCursor
 				.filter { !isNearEdge(startPoint, of: $0.frame) }
 			// The window server moves a window by itself once it receives the mouse-down on a
 			// title bar: swallowing the drag events is too late. Hold the mouse-down back instead,
@@ -795,7 +821,7 @@ final class ShortcutRecorder: NSObject, NSWindowDelegate {
 
 // MARK: - Menu bar app
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 	private let settings = Settings()
 	private lazy var dragGuard = DragGuard(settings: settings)
 	private var statusItem: NSStatusItem!
@@ -898,6 +924,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		shortcutItem.submenu = shortcutMenu
 		menu.addItem(shortcutItem)
 
+		// Filled each time it opens, so apps launched since show up.
+		let exceptItem = NSMenuItem(title: localized("Except apps"), action: nil, keyEquivalent: "")
+		let exceptMenu = NSMenu()
+		exceptMenu.delegate = self
+		exceptItem.submenu = exceptMenu
+		menu.addItem(exceptItem)
+
 		let soundItem = NSMenuItem(title: localized("Refusal sound"), action: nil, keyEquivalent: "")
 		let soundMenu = NSMenu()
 		for sound in RefusalSound.allCases {
@@ -960,6 +993,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 		}
 		writeLog("lock turned \(settings.enabled ? "on" : "off")\(fromShortcut ? " by the shortcut" : "")")
 		rebuildMenu()
+	}
+
+	/// The open apps and the checked apps that are not open, sorted by name. Checked ones move freely.
+	func menuNeedsUpdate(_ menu: NSMenu) {
+		menu.removeAllItems()
+		let excepted = settings.exceptApps
+		var apps: [String: (name: String, icon: NSImage?)] = [:]
+		for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
+			guard let id = app.bundleIdentifier, id != Bundle.main.bundleIdentifier else {
+				continue
+			}
+			apps[id] = (app.localizedName ?? id, app.icon)
+		}
+		for id in excepted where apps[id] == nil {
+			if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) {
+				let name = FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+				apps[id] = (name, NSWorkspace.shared.icon(forFile: url.path))
+			} else {
+				apps[id] = (id, nil)
+			}
+		}
+
+		let hint = NSMenuItem(title: localized("Checked apps move without the move key"), action: nil, keyEquivalent: "")
+		hint.isEnabled = false
+		menu.addItem(hint)
+		menu.addItem(.separator())
+		let sorted = apps.sorted { $0.value.name.localizedCaseInsensitiveCompare($1.value.name) == .orderedAscending }
+		for (id, app) in sorted {
+			let entry = item(app.name, #selector(toggleExceptApp(_:)), checked: excepted.contains(id))
+			entry.representedObject = id
+			if let icon = app.icon?.copy() as? NSImage {
+				icon.size = NSSize(width: 16, height: 16)
+				entry.image = icon
+			}
+			menu.addItem(entry)
+		}
+	}
+
+	@objc private func toggleExceptApp(_ sender: NSMenuItem) {
+		guard let id = sender.representedObject as? String else {
+			return
+		}
+		var excepted = settings.exceptApps
+		if excepted.remove(id) == nil {
+			excepted.insert(id)
+		}
+		settings.exceptApps = excepted
+		writeLog("except apps: \(excepted.sorted().joined(separator: ", "))")
 	}
 
 	@objc private func changeShortcut() {

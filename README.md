@@ -100,6 +100,7 @@ git push origin v1.0.0
   - A short sound tells whether the lock is now on (Tink) or off (Pop).
 - **Block during the drag**: block as described above, or only snap the window back on release.
 - **Move key**: ⌘, ⌥, ⌃ or ⇧.
+- **Except apps**: the open apps; the windows of a checked app move freely, without the move key.
 - **Refusal sound**: the sound played when a move is refused, and its volume. Choosing one plays it.
 - **Open at login**: launch at login.
 

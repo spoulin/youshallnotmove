@@ -111,6 +111,8 @@ git push origin v1.0.0
   - Windows are moved through Accessibility once the mouse button is up, so it never fights a drag.
   - It comes from the WindowMargins module of `Vendor/SharedMacKit`. When another app with margins
     on has a higher priority, it handles them and the menu says so.
+  - It also keeps clear the zones other apps share, such as Solpaper's text, even from the
+    App Store version of Solpaper, which can't move windows itself.
 - **Open at login**: launch at login.
 
 The menu is in English, or in French when macOS is in French.

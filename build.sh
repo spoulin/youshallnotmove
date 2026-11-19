@@ -25,7 +25,7 @@ mkdir -p "$APP/Contents/MacOS"
 compile() { # compile <output> [target]
 	swiftc -O -swift-version 5 ${2:+-target "$2"} \
 		-o "$1" \
-		Sources/*.swift Vendor/SharedMacKit/Sources/WindowMargins/*.swift \
+		Sources/*.swift Vendor/SharedMacKit/Sources/WindowMargins/*.swift Vendor/SharedMacKit/Sources/MarginZones/*.swift \
 		-framework AppKit -framework ApplicationServices -framework Carbon -framework ServiceManagement
 }
 if [[ -n "${UNIVERSAL:-}" ]]; then

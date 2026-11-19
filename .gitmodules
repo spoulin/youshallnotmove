@@ -1,0 +1,3 @@
+[submodule "Vendor/SharedMacKit"]
+	path = Vendor/SharedMacKit
+	url = git@github.com:spoulin/SharedMacKit.git

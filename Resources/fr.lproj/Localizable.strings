@@ -31,3 +31,8 @@
 "%@ is already used by another app. Try another one." = "%@ est déjà pris par une autre app. Essayez-en un autre.";
 "Except apps" = "Sauf ces apps";
 "Checked apps move without the move key" = "Les apps cochées bougent sans la touche";
+"Keep Windows Away from Screen Edges" = "Garder les fenêtres loin des bords de l’écran";
+"Margin" = "Marge";
+"%d px" = "%d px";
+"Margins handled by %@" = "Marges gérées par %@";
+"Margins need Accessibility access" = "Les marges ont besoin de l’accès Accessibilité";

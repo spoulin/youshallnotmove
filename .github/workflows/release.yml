@@ -25,6 +25,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # build.sh counts the commits for the build number
+          # Vendor/SharedMacKit is a private repository: SHAREDMACKIT_DEPLOY_KEY is the private
+          # half of a read-only deploy key added to spoulin/SharedMacKit.
+          submodules: recursive
+          ssh-key: ${{ secrets.SHAREDMACKIT_DEPLOY_KEY }}
 
       # Signed with the "YouShallNotMove Release Signing" certificate (self-signed, not tied to
       # an Apple account; repository secrets SIGNING_P12 and SIGNING_P12_PASSWORD). The same

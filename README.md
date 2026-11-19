@@ -60,6 +60,8 @@ signed with the same certificate, so the Accessibility access stays.
 ## Build and install
 
 Requires the Xcode command line tools.
+Get the `Vendor/SharedMacKit` submodule first: `git submodule update --init` (or clone with
+`--recurse-submodules`).
 
 ```bash
 ./build.sh
@@ -102,6 +104,11 @@ git push origin v1.0.0
 - **Move key**: ⌘, ⌥, ⌃ or ⇧.
 - **Except apps**: the open apps; the windows of a checked app move freely, without the move key.
 - **Refusal sound**: the sound played when a move is refused, and its volume. Choosing one plays it.
+- **Keep Windows Away from Screen Edges**: maximized and tiled windows stay a margin away from the
+  screen edges, chosen in **Margin** (8 to 40 px, 12 by default). Off by default.
+  - Windows are moved through Accessibility once the mouse button is up, so it never fights a drag.
+  - It comes from the WindowMargins module of `Vendor/SharedMacKit`. When another app with margins
+    on has a higher priority, it handles them and the menu says so.
 - **Open at login**: launch at login.
 
 The menu is in English, or in French when macOS is in French.

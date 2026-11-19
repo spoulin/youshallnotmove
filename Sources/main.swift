@@ -99,6 +99,18 @@ final class Settings {
 		set { defaults.set(newValue.sorted(), forKey: "exceptApps") }
 	}
 
+	/// Keep maximized and tiled windows a margin away from the screen edges. Off for new users.
+	var marginsEnabled: Bool {
+		get { defaults.bool(forKey: "marginsEnabled") }
+		set { defaults.set(newValue, forKey: "marginsEnabled") }
+	}
+
+	/// The space kept between windows and the screen edges, in points.
+	var margin: Int {
+		get { defaults.object(forKey: "margin") as? Int ?? 12 }
+		set { defaults.set(newValue, forKey: "margin") }
+	}
+
 	/// The system-wide shortcut that turns the lock on or off. nil when the user chose None.
 	var toggleShortcut: Shortcut? {
 		get {
@@ -830,6 +842,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 		self?.toggle(fromShortcut: true)
 	}
 	private let recorder = ShortcutRecorder()
+	/// Keeps windows away from the screen edges (Vendor/SharedMacKit). It shares the Accessibility
+	/// access asked for by the drag guard, and steps back when another app with a higher priority
+	/// handles the margins.
+	private lazy var margins = WindowMargins(
+		appID: Bundle.main.bundleIdentifier ?? "com.spoulin.youshallnotmove",
+		displayName: "You Shall Not Move",
+		priority: 100,
+		isEnabled: settings.marginsEnabled,
+		margin: CGFloat(settings.margin)
+	)
+	private let marginChoices = [8, 12, 20, 30, 40]
 	/// False when macOS refused the saved shortcut, usually because another app has it.
 	private var shortcutActive = true
 	/// The menu's key equivalent and the hot key can both fire while the menu is open.
@@ -840,6 +863,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 		registerShortcut()
 		rebuildMenu()
 		startWhenTrusted(prompt: true)
+		// No requestAccess(): startWhenTrusted already asks, and the margins start by themselves
+		// once access is granted.
+		margins.onStatusChange = { [weak self] status in
+			writeLog("margins: \(status)")
+			self?.rebuildMenu()
+		}
+		margins.start()
 	}
 
 	private func registerShortcut() {
@@ -956,6 +986,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 		menu.addItem(soundItem)
 
 		menu.addItem(.separator())
+		menu.addItem(item(localized("Keep Windows Away from Screen Edges"), #selector(toggleMargins), checked: settings.marginsEnabled))
+		let marginItem = NSMenuItem(title: localized("Margin"), action: nil, keyEquivalent: "")
+		let marginMenu = NSMenu()
+		for margin in marginChoices {
+			let entry = item(String(format: localized("%d px"), margin), #selector(chooseMargin(_:)), checked: settings.margin == margin)
+			entry.representedObject = margin
+			marginMenu.addItem(entry)
+		}
+		marginItem.submenu = marginMenu
+		menu.addItem(marginItem)
+		switch margins.status {
+		case .deferred(let name):
+			menu.addItem(note(String(format: localized("Margins handled by %@"), name)))
+		case .waitingForAccess:
+			menu.addItem(note(localized("Margins need Accessibility access")))
+		case .off, .active:
+			break
+		}
+
+		menu.addItem(.separator())
 		let loginEnabled = SMAppService.mainApp.status == .enabled
 		menu.addItem(item(localized("Open at login"), #selector(toggleLaunchAtLogin), checked: loginEnabled))
 		menu.addItem(.separator())
@@ -973,6 +1023,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 		let entry = NSMenuItem(title: title, action: action, keyEquivalent: key)
 		entry.target = self
 		entry.state = checked ? .on : .off
+		return entry
+	}
+
+	/// A grayed-out line that only informs.
+	private func note(_ title: String) -> NSMenuItem {
+		let entry = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+		entry.isEnabled = false
 		return entry
 	}
 
@@ -1066,6 +1123,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 	@objc private func clearShortcut() {
 		settings.toggleShortcut = nil
 		registerShortcut()
+		rebuildMenu()
+	}
+
+	@objc private func toggleMargins() {
+		settings.marginsEnabled.toggle()
+		margins.isEnabled = settings.marginsEnabled
+		writeLog("margins turned \(settings.marginsEnabled ? "on" : "off")")
+		rebuildMenu()
+	}
+
+	@objc private func chooseMargin(_ sender: NSMenuItem) {
+		if let margin = sender.representedObject as? Int {
+			settings.margin = margin
+			margins.margin = CGFloat(margin)
+		}
 		rebuildMenu()
 	}
 

@@ -33,6 +33,9 @@
 "Checked apps move without the move key" = "Les apps cochées bougent sans la touche";
 "Keep Windows Away from Screen Edges" = "Garder les fenêtres loin des bords de l’écran";
 "Margin" = "Marge";
+"Margins On" = "Marges sur";
+"The Screen with the Dock" = "L’écran du Dock";
+"All Screens" = "Tous les écrans";
 "%d px" = "%d px";
 "Margins handled by %@" = "Marges gérées par %@";
 "Margins need Accessibility access" = "Les marges ont besoin de l’accès Accessibilité";

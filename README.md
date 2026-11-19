@@ -106,6 +106,8 @@ git push origin v1.0.0
 - **Refusal sound**: the sound played when a move is refused, and its volume. Choosing one plays it.
 - **Keep Windows Away from Screen Edges**: maximized and tiled windows stay a margin away from the
   screen edges, chosen in **Margin** (8 to 40 px, 12 by default). Off by default.
+  - **Margins On**: only the screen with the Dock (the default), or all screens. Each screen
+    keeps the margin from its own menu bar, and from the Dock when it shows there.
   - Windows are moved through Accessibility once the mouse button is up, so it never fights a drag.
   - It comes from the WindowMargins module of `Vendor/SharedMacKit`. When another app with margins
     on has a higher priority, it handles them and the menu says so.

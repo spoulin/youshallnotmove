@@ -111,6 +111,12 @@ final class Settings {
 		set { defaults.set(newValue, forKey: "margin") }
 	}
 
+	/// The screens that get margins: only the one with the Dock (the default), or all of them.
+	var marginScreens: WindowMargins.Screens {
+		get { defaults.string(forKey: "marginScreens").flatMap(WindowMargins.Screens.init(rawValue:)) ?? .dockScreen }
+		set { defaults.set(newValue.rawValue, forKey: "marginScreens") }
+	}
+
 	/// The system-wide shortcut that turns the lock on or off. nil when the user chose None.
 	var toggleShortcut: Shortcut? {
 		get {
@@ -845,13 +851,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 	/// Keeps windows away from the screen edges (Vendor/SharedMacKit). It shares the Accessibility
 	/// access asked for by the drag guard, and steps back when another app with a higher priority
 	/// handles the margins.
-	private lazy var margins = WindowMargins(
-		appID: Bundle.main.bundleIdentifier ?? "com.spoulin.youshallnotmove",
-		displayName: "You Shall Not Move",
-		priority: 100,
-		isEnabled: settings.marginsEnabled,
-		margin: CGFloat(settings.margin)
-	)
+	private lazy var margins: WindowMargins = {
+		let margins = WindowMargins(
+			appID: Bundle.main.bundleIdentifier ?? "com.spoulin.youshallnotmove",
+			displayName: "You Shall Not Move",
+			priority: 100,
+			isEnabled: settings.marginsEnabled,
+			margin: CGFloat(settings.margin)
+		)
+		margins.screens = settings.marginScreens
+		return margins
+	}()
 	private let marginChoices = [8, 12, 20, 30, 40]
 	/// False when macOS refused the saved shortcut, usually because another app has it.
 	private var shortcutActive = true
@@ -996,6 +1006,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 		}
 		marginItem.submenu = marginMenu
 		menu.addItem(marginItem)
+		let screensItem = NSMenuItem(title: localized("Margins On"), action: nil, keyEquivalent: "")
+		let screensMenu = NSMenu()
+		for (choice, title) in [(WindowMargins.Screens.dockScreen, "The Screen with the Dock"), (.all, "All Screens")] {
+			let entry = item(localized(title), #selector(chooseMarginScreens(_:)), checked: settings.marginScreens == choice)
+			entry.representedObject = choice.rawValue
+			screensMenu.addItem(entry)
+		}
+		screensItem.submenu = screensMenu
+		menu.addItem(screensItem)
 		switch margins.status {
 		case .deferred(let name):
 			menu.addItem(note(String(format: localized("Margins handled by %@"), name)))
@@ -1137,6 +1156,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 		if let margin = sender.representedObject as? Int {
 			settings.margin = margin
 			margins.margin = CGFloat(margin)
+		}
+		rebuildMenu()
+	}
+
+	@objc private func chooseMarginScreens(_ sender: NSMenuItem) {
+		if let raw = sender.representedObject as? String, let choice = WindowMargins.Screens(rawValue: raw) {
+			settings.marginScreens = choice
+			margins.screens = choice
+			writeLog("margins on \(choice.rawValue)")
 		}
 		rebuildMenu()
 	}
